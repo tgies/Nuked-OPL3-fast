@@ -21,6 +21,11 @@ shortcuts that are only hit for channels that are silent, uninitialized, etc.
 Tests are based on a light early-Apogee-style IMF tune and a recent demoscene
 production that is doing stuff in basically all the slots all the time.
 
+Across a 40-track random sample from
+[The OPL Archive](https://opl.wafflenet.com/), this fork rendered every file
+1.44x to 2.10x faster than upstream (median 1.85x), with output identical to
+upstream Nuked-OPL3 on all 40.
+
 ## API
 
 Drop-in source-level replacement. All public functions and the public
@@ -45,6 +50,10 @@ committed; you only need Python if you want to regenerate it.
 Every kept change produces identical 16-bit PCM samples for the same
 register stream as an unmodified upstream build. Candidate optimizations
 that affected output were discarded.
+
+A 40-track random sample from
+[The OPL Archive](https://opl.wafflenet.com/) produced render checksums
+identical to upstream Nuked-OPL3 on every file.
 
 The test suite will be made available in the near future.
 
