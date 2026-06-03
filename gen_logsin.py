@@ -136,6 +136,11 @@ print("""\
  *     python3 gen_logsin.py > wf_rom.h
  */
 """)
+print("#ifndef OPL_WF_ROM_H")
+print("#define OPL_WF_ROM_H")
+print()
+print("#include <stdint.h>")
+print()
 print("static const uint16_t logsin_wf[8][1024] = {")
 for wf in range(8):
     print("    {")
@@ -145,3 +150,5 @@ for wf in range(8):
         print(f"        {s}{',' if i < 1016 else ''}")
     print("    }" + ("," if wf < 7 else ""))
 print("};")
+print()
+print("#endif /* OPL_WF_ROM_H */")
