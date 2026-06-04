@@ -45,15 +45,29 @@ Add to your build:
 `gen_logsin.py` is the generator for `wf_rom.h`. The generated file is
 committed; you only need Python if you want to regenerate it.
 
+If it has been a while since you have updated your project's vendored copy of
+Nuked-OPL3, you should be aware of a couple things:
+
+- You may pick up some fixes from upstream that you didn't have before. Many
+  projects use a version of Nuked-OPL3 that is missing some fixes to the
+  envelope algorithm. If your audio output isn't sample-for-sample the same
+  after switching to Nuked-OPL3-fast, that's why, and your emulation is now more
+  accurate. Before filing an issue claiming a divergence from upstream
+  Nuked-OPL3, make sure you're comparing to *current* upstream.
+- Many projects have their own patches on top of Nuked-OPL3, commonly to
+  add/modify pan laws, mixer-level muting of channels, buffering tweaks, etc. Be
+  sure you reapply any such project-local patches to Nuked-OPL3-fast.
+
 ## Bit-exactness
 
-Every kept change produces identical 16-bit PCM samples for the same
-register stream as an unmodified upstream build. Candidate optimizations
-that affected output were discarded.
+Nuked-OPL3-fast produces identical output to an unmodified upstream build.
 
-A 40-track random sample from
+Among other extensive verifications, a 40-track random sample from
 [The OPL Archive](https://opl.wafflenet.com/) produced render checksums
 identical to upstream Nuked-OPL3 on every file.
+
+[CBMC](https://www.cprover.org/) was used to verify the correctness of key
+paths.
 
 The test suite will be made available in the near future.
 
@@ -76,6 +90,15 @@ The full annotated list is at the top of `opl3.c`. At a high level:
 - Hot fields hoisted into the first cache line of `opl3_slot`; struct
   size dropped from 96 to 88 bytes.
 
+## Why a fork and not a PR?
+
+These changes were offered to upstream, but declined. My interpretation is that
+Nuke.YKT's emulators are intended to serve partly as something of a readable
+specification of the behavior of the real chip, and some of my optimizations
+conflict with that. I don't think upstream necessarily *missed* optimizations so
+much as made an informed choice to forego some. Much respect is owed to Nuke.YKT
+for creating and maintaining many gold-standard sound chip emulators.
+
 ## License
 
 LGPL-2.1-or-later. See `LICENSE`.
@@ -83,5 +106,7 @@ LGPL-2.1-or-later. See `LICENSE`.
 ## Credits
 
 See comments in `opl3.c`.
+
+Nuked-OPL3 was created by Nuke.YKT.
 
 This fork is maintained by Tony Gies.
