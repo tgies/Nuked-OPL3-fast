@@ -60,6 +60,9 @@
  *     single switch indexed by slot_num for jump-table dispatch.
  *   - Reordered opl3_slot to put hot per-sample fields in the first cache
  *     line; struct size reduced from 96 to 88 bytes.
+ *   - Per-slot pg_inc_vib[8] (phase increment per vibrato position) replaces
+ *     the per-sample vibrato recomputation; rebuilt on the writes that affect
+ *     it (f_num/block/mult/vibshift).
  *   - Minor: __builtin_ctz for the envelope timer on GCC/Clang with a
  *     portable fallback; replaced the tremolo-position modulo with an
  *     explicit wrap.
@@ -392,29 +395,15 @@ static void OPL3_EnvelopeKeyOff(opl3_slot *slot, uint8_t type)
 static void OPL3_PhaseUpdateInc(opl3_slot *slot)
 {
     uint32_t basefreq = ((uint32_t)slot->channel->f_num << slot->channel->block) >> 1;
+    uint8_t vibpos;
     slot->pg_inc = (basefreq * mt[slot->reg_mult]) >> 1;
-}
-
-static void OPL3_PhaseGenerate(opl3_slot *slot)
-{
-    opl3_chip *chip;
-    uint16_t f_num;
-    uint32_t basefreq;
-    uint32_t phaseinc;
-    uint8_t rm_xor, n_bit;
-    uint32_t noise;
-    uint16_t phase;
-
-    chip = slot->chip;
-    if (slot->reg_vib)
+    /* Per-vibpos increments (exact replica of the vibrato f_num adjustment
+     * the phase generator applies per sample), so vib slots resolve their
+     * increment with one load. Rebuilt when vibshift changes */
+    for (vibpos = 0; vibpos < 8; vibpos++)
     {
-        int8_t range;
-        uint8_t vibpos;
-
-        f_num = slot->channel->f_num;
-        range = (f_num >> 7) & 7;
-        vibpos = slot->chip->vibpos;
-
+        uint16_t f_num = slot->channel->f_num;
+        int8_t range = (f_num >> 7) & 7;
         if (!(vibpos & 3))
         {
             range = 0;
@@ -424,14 +413,28 @@ static void OPL3_PhaseGenerate(opl3_slot *slot)
             range >>= 1;
         }
         range >>= slot->chip->vibshift;
-
         if (vibpos & 4)
         {
             range = -range;
         }
         f_num += range;
-        basefreq = (f_num << slot->channel->block) >> 1;
-        phaseinc = (basefreq * mt[slot->reg_mult]) >> 1;
+        slot->pg_inc_vib[vibpos] =
+            ((((uint32_t)f_num << slot->channel->block) >> 1) * mt[slot->reg_mult]) >> 1;
+    }
+}
+
+static void OPL3_PhaseGenerate(opl3_slot *slot)
+{
+    opl3_chip *chip;
+    uint32_t phaseinc;
+    uint8_t rm_xor, n_bit;
+    uint32_t noise;
+    uint16_t phase;
+
+    chip = slot->chip;
+    if (slot->reg_vib)
+    {
+        phaseinc = slot->pg_inc_vib[chip->vibpos];
     }
     else
     {
@@ -1052,27 +1055,7 @@ static void OPL3_ProcessSlot(opl3_slot *slot)
 
         if (slot->reg_vib)
         {
-            uint16_t f_num = slot->channel->f_num;
-            int8_t range = (f_num >> 7) & 7;
-            uint8_t vibpos = chip->vibpos;
-
-            if (!(vibpos & 3))
-            {
-                range = 0;
-            }
-            else if (vibpos & 1)
-            {
-                range >>= 1;
-            }
-            range >>= chip->vibshift;
-
-            if (vibpos & 4)
-            {
-                range = -range;
-            }
-            f_num += range;
-            phaseinc = (((uint32_t)f_num << slot->channel->block) >> 1)
-                     * mt[slot->reg_mult] >> 1;
+            phaseinc = slot->pg_inc_vib[chip->vibpos];
         }
         else
         {
@@ -1497,12 +1480,21 @@ void OPL3_WriteReg(opl3_chip *chip, uint16_t reg, uint8_t v)
         if (regm == 0xbd && !high)
         {
             uint8_t tremoloshift = (((v >> 7) ^ 1) << 1) + 2;
+            uint8_t vibshift = ((v >> 6) & 0x01) ^ 1;
             if (chip->tremoloshift != tremoloshift)
             {
                 chip->tremolo_dirty = 1;
             }
             chip->tremoloshift = tremoloshift;
-            chip->vibshift = ((v >> 6) & 0x01) ^ 1;
+            if (chip->vibshift != vibshift)
+            {
+                uint8_t ii;
+                chip->vibshift = vibshift;
+                for (ii = 0; ii < 36; ii++)
+                {
+                    OPL3_PhaseUpdateInc(&chip->slot[ii]);
+                }
+            }
             OPL3_ChannelUpdateRhythm(chip, v);
         }
         else if ((regm & 0x0f) < 9)

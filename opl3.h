@@ -40,7 +40,7 @@
  * Modifications vs. upstream visible in this header:
  *
  *   - Added cached fields to opl3_slot: eg_tl_ksl, eg_ks, pg_inc,
- *     eg_rate_hi[4], eg_rate_lo[4], slot_num.
+ *     pg_inc_vib[8], eg_rate_hi[4], eg_rate_lo[4], slot_num.
  *   - Added out_cnt to opl3_channel for mix-loop active-slot tracking.
  *   - Reordered opl3_slot to put hot per-sample fields first; struct size
  *     shrank from 96 to 88 bytes.
@@ -104,6 +104,10 @@ struct _opl3_slot {
     uint8_t eg_rates[4];
     uint8_t eg_rate_hi[4];
     uint8_t eg_rate_lo[4];
+    /* Phase increment per vibrato position, maintained by
+     * OPL3_PhaseUpdateInc (and rebuilt on vibshift changes); pg_inc_vib[pos]
+     * equals the upstream per-sample vibrato f_num adjustment for that pos. */
+    uint32_t pg_inc_vib[8];
 };
 
 struct _opl3_channel {
