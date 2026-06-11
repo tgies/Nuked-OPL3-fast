@@ -41,7 +41,9 @@
  *
  *   - Added cached fields to opl3_slot: eg_tl_ksl, eg_ks, pg_inc,
  *     pg_inc_vib[8], eg_rate_hi[4], eg_rate_lo[4], slot_num.
- *   - Added out_cnt to opl3_channel for mix-loop active-slot tracking.
+ *   - Added out_cnt to opl3_channel for mix-loop active-slot tracking, and
+ *     out_left[4]/out_right[4] mix pointer lists (under
+ *     OPL_QUIRK_CHANNELSAMPLEDELAY).
  *   - Reordered opl3_slot to put hot per-sample fields first; struct size
  *     shrank from 96 to 88 bytes.
  *   - Removed unused legacy fields (eg_inc, eg_rate) from opl3_slot.
@@ -58,6 +60,10 @@ extern "C" {
 
 #ifndef OPL_ENABLE_STEREOEXT
 #define OPL_ENABLE_STEREOEXT 0
+#endif
+
+#ifndef OPL_QUIRK_CHANNELSAMPLEDELAY
+#define OPL_QUIRK_CHANNELSAMPLEDELAY (!OPL_ENABLE_STEREOEXT)
 #endif
 
 #define OPL_WRITEBUF_SIZE   1024
@@ -115,6 +121,16 @@ struct _opl3_channel {
     opl3_channel *pair;
     opl3_chip *chip;
     int16_t *out[4];
+#if OPL_QUIRK_CHANNELSAMPLEDELAY
+    /* Mix-pass pointer lists: identical to out[] except entries pointing at
+     * a delayed slot's out are redirected to its prout, which holds the
+     * previous sample's out once all 36 slots are processed. out_left delays
+     * slots 15-35 and out_right delays 33-35, reproducing the
+     * CHANNELSAMPLEDELAY snapshots without staging slot processing around
+     * the mixes. */
+    int16_t *out_left[4];
+    int16_t *out_right[4];
+#endif
     uint8_t out_cnt;
 
 #if OPL_ENABLE_STEREOEXT
