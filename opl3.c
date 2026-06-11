@@ -63,6 +63,8 @@
  *   - Per-slot pg_inc_vib[8] (phase increment per vibrato position) replaces
  *     the per-sample vibrato recomputation; rebuilt on the writes that affect
  *     it (f_num/block/mult/vibshift).
+ *   - Hoisted the noise LFSR out of slot processing into a word-parallel
+ *     36-step advance at the top of OPL3_Generate4Ch.
  *   - Minor: __builtin_ctz for the envelope timer on GCC/Clang with a
  *     portable fallback; replaced the tremolo-position modulo with an
  *     explicit wrap.
@@ -427,8 +429,7 @@ static void OPL3_PhaseGenerate(opl3_slot *slot)
 {
     opl3_chip *chip;
     uint32_t phaseinc;
-    uint8_t rm_xor, n_bit;
-    uint32_t noise;
+    uint8_t rm_xor;
     uint16_t phase;
 
     chip = slot->chip;
@@ -449,7 +450,6 @@ static void OPL3_PhaseGenerate(opl3_slot *slot)
     /* Rhythm mode: dispatch on slot_num via a single switch so non-rhythm
      * slots (33 of 36) hit the default case and skip everything. The
      * fused switch also lets gcc emit a jump table instead of branches. */
-    noise = chip->noise;
     slot->pg_phase_out = phase;
     switch (slot->slot_num)
     {
@@ -464,7 +464,7 @@ static void OPL3_PhaseGenerate(opl3_slot *slot)
                    | (chip->rm_hh_bit3 ^ chip->rm_tc_bit5)
                    | (chip->rm_tc_bit3 ^ chip->rm_tc_bit5);
             slot->pg_phase_out = rm_xor << 9;
-            if (rm_xor ^ (noise & 1))
+            if (rm_xor ^ (chip->noise_hh & 1))
             {
                 slot->pg_phase_out |= 0xd0;
             }
@@ -478,7 +478,7 @@ static void OPL3_PhaseGenerate(opl3_slot *slot)
         if (chip->rhy & 0x20)
         {
             slot->pg_phase_out = (chip->rm_hh_bit8 << 9)
-                               | ((chip->rm_hh_bit8 ^ (noise & 1)) << 8);
+                               | ((chip->rm_hh_bit8 ^ (chip->noise_sd & 1)) << 8);
         }
         break;
     case 17: /* tc */
@@ -495,8 +495,6 @@ static void OPL3_PhaseGenerate(opl3_slot *slot)
     default:
         break;
     }
-    n_bit = ((noise >> 14) ^ noise) & 0x01;
-    chip->noise = (noise >> 1) | (n_bit << 22);
 }
 
 /*
@@ -1030,8 +1028,6 @@ static void OPL3_ProcessSlot(opl3_slot *slot)
         opl3_chip *chip = slot->chip;
         uint32_t phaseinc;
         uint16_t phase;
-        uint32_t noise = chip->noise;
-        uint8_t n_bit = ((noise >> 14) ^ noise) & 0x01;
 
         if (slot->channel->fb == 0 && slot->pg_inc == 0 && slot->out == 0
             && *slot->mod == 0 && slot->eg_tl_ksl == 0 && *slot->trem == 0
@@ -1043,7 +1039,6 @@ static void OPL3_ProcessSlot(opl3_slot *slot)
             slot->pg_reset = 0;
             slot->eg_gen = envelope_gen_num_release;
             slot->pg_phase_out = 0;
-            chip->noise = (noise >> 1) | (n_bit << 22);
             return;
         }
 
@@ -1065,7 +1060,6 @@ static void OPL3_ProcessSlot(opl3_slot *slot)
         phase = (uint16_t)(slot->pg_phase >> 9);
         slot->pg_phase += phaseinc;
         slot->pg_phase_out = phase;
-        chip->noise = (noise >> 1) | (n_bit << 22);
 
         /* eg_out = eg_rout + eg_tl_ksl + *trem >= 0x1ff here, so the
          * silent-regime shortcut is always valid. */
@@ -1086,14 +1080,10 @@ static void OPL3_ProcessSlot(opl3_slot *slot)
         if (!slot->reg_vib
             && slot->slot_num != 13 && slot->slot_num != 16 && slot->slot_num != 17)
         {
-            opl3_chip *chip = slot->chip;
-            uint32_t noise = chip->noise;
-            uint8_t n_bit = ((noise >> 14) ^ noise) & 0x01;
             uint16_t phase = (uint16_t)(slot->pg_phase >> 9);
 
             slot->pg_phase += slot->pg_inc;
             slot->pg_phase_out = phase;
-            chip->noise = (noise >> 1) | (n_bit << 22);
         }
         else
         {
@@ -1122,6 +1112,32 @@ inline void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
 
     buf4[1] = OPL3_ClipSample(chip->mixbuff[1]);
     buf4[3] = OPL3_ClipSample(chip->mixbuff[3]);
+
+    /* Advance the noise LFSR for the whole sample up front (36 steps, one per
+     * slot), capturing the bits the hh (slot 13) and sd (slot 16) operators
+     * read. This way slot processing does not touch the LFSR so it doesn't need
+     * to run in strict slot order.
+     *
+     * The 36 feedback bits are computable word-parallel as:
+     * fb_i = s_i ^ s_{i+14} for i in [0,8],
+     * fb_i = s_i ^ fb_{i-9} for i in [9,22],
+     * fb_i = fb_{i-23} ^ fb_{i-9} for i >= 23,
+     * and the state after 36 steps is fb_13..fb_35. The hh/sd taps only read
+     * bit 0 of the intermediate state, which is s_13 / s_16. */
+    {
+        uint32_t s = chip->noise;
+        uint32_t f0_8   = (s ^ (s >> 14)) & 0x1ffu;          /* fb 0..8   */
+        uint32_t f9_17  = ((s >> 9) ^ f0_8) & 0x1ffu;        /* fb 9..17  */
+        uint32_t f18_22 = ((s >> 18) ^ f9_17) & 0x1fu;       /* fb 18..22 */
+        uint32_t f23_31 = f0_8 ^ ((f9_17 >> 5) | (f18_22 << 4)); /* fb 23..31 */
+        uint32_t f32_35 = (f9_17 ^ f23_31) & 0x0fu;          /* fb 32..35 */
+        chip->noise_hh = (s >> 13) & 1u;
+        chip->noise_sd = (s >> 16) & 1u;
+        chip->noise = ((f9_17 >> 4) & 0x1fu)
+                    | (f18_22 << 5)
+                    | (f23_31 << 10)
+                    | (f32_35 << 19);
+    }
 
 #if OPL_QUIRK_CHANNELSAMPLEDELAY
     for (ii = 0; ii < 15; ii++)

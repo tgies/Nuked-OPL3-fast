@@ -159,6 +159,10 @@ struct _opl3_chip {
     uint8_t tremoloshift;
     uint8_t tremolo_dirty;
     uint32_t noise;
+    /* Bit 0 of the noise LFSR state as seen by the hh (slot 13) and sd
+     * (slot 16) rhythm operators, precomputed per sample */
+    uint32_t noise_hh;
+    uint32_t noise_sd;
     int16_t zeromod;
     int32_t mixbuff[4];
     uint8_t rm_hh_bit2;
