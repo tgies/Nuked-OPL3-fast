@@ -13,8 +13,9 @@ Measured on x86-64 Linux, GCC `-O2`, best of repeated runs:
 
 | Workload                                | Upstream | This fork | Speedup |
 |-----------------------------------------|----------|-----------|---------|
-| Synthetic chip-core (TSC ticks/sample)  | ~900     | ~400      | ~2.2x   |
-| Full-track VGM render (3.5 min)         | 4.8 s    | 3.0 s     | ~1.6x   |
+| Synthetic chip-core (ns/sample)         | ~310     | ~140      | ~2.2x   |
+| Light IMF tune (ns/frame)               | ~295     | ~145      | ~2.0x   |
+| Dense full-track VGM render (3.5 min)   | 4.3 s    | 2.7 s     | ~1.6x   |
 
 Mileage may vary depending on content being rendered. There are several
 shortcuts that are only hit for channels that are silent, uninitialized, etc.
@@ -23,7 +24,7 @@ production that is doing stuff in basically all the slots all the time.
 
 Across a 40-track random sample from
 [The OPL Archive](https://opl.wafflenet.com/), this fork rendered every file
-1.44x to 2.10x faster than upstream (median 1.85x), with output identical to
+1.42x to 2.30x faster than upstream (median 1.99x), with output identical to
 upstream Nuked-OPL3 on all 40.
 
 ## API
@@ -89,6 +90,13 @@ The full annotated list is at the top of `opl3.c`. At a high level:
   `slot_num` switch for jump-table dispatch.
 - Hot fields hoisted into the first cache line of `opl3_slot`; struct
   size dropped from 96 to 88 bytes.
+- Per-slot cache of the phase increment at each vibrato position
+  (`pg_inc_vib`), rebuilt on the writes that affect it.
+- Noise LFSR hoisted out of slot processing into a word-parallel
+  36-step advance at the top of `OPL3_Generate4Ch`.
+- All 36 slots processed as channel pairs before either mix pass, with
+  per-channel pointer lists reproducing the L/R sample-delay quirk and an
+  inlined skip for trivially-silent slots.
 
 ## Why a fork and not a PR?
 
