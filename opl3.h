@@ -31,7 +31,7 @@
  *          YMF262 and VRC VII decaps and die shots.
  *
  * Upstream version: 1.8 (commit cfedb09)
- * Fork version:    1.8-fast.1
+ * Fork version:    1.8-fast.2
  * Fork home:       https://github.com/tgies/Nuked-OPL3-fast
  *
  * Nuked-OPL3-fast is a bit-exact performance-optimized fork of Nuked-OPL3.
