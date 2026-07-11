@@ -50,6 +50,8 @@
  *   - Added dormant_gen to opl3_slot and write_gen to opl3_chip (dormant
  *     slot skip), plus mix_left/mix_right/nmix_left/nmix_right/mix_dirty
  *     to opl3_chip (mix-eligibility lists).
+ *   - Added the OPL_WF_TABLE_RUNTIME build option (runtime-built waveform
+ *     table in place of wf_rom.h).
  */
 
 #ifndef OPL_OPL3_H
@@ -67,6 +69,15 @@ extern "C" {
 
 #ifndef OPL_QUIRK_CHANNELSAMPLEDELAY
 #define OPL_QUIRK_CHANNELSAMPLEDELAY (!OPL_ENABLE_STEREOEXT)
+#endif
+
+/* OPL_WF_TABLE_RUNTIME=1 builds the 16 KB logsin waveform table at the
+ * first OPL3_Reset instead of compiling in wf_rom.h, trading read-only
+ * data for zero-initialized RAM. The table data is identical either way.
+ * The first OPL3_Reset in the process must not run concurrently with
+ * another reset. */
+#ifndef OPL_WF_TABLE_RUNTIME
+#define OPL_WF_TABLE_RUNTIME 0
 #endif
 
 #define OPL_WRITEBUF_SIZE   1024

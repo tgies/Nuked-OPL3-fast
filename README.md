@@ -76,6 +76,14 @@ Add to your build:
 `gen_logsin.py` is the generator for `wf_rom.h`. The generated file is
 committed; you only need Python if you want to regenerate it.
 
+If you would rather not carry the generated header (some vendoring setups
+prefer no large data blobs), build with `-DOPL_WF_TABLE_RUNTIME=1`. The
+table is then derived from the 512-byte base logsin table at the first
+`OPL3_Reset`, `wf_rom.h` is not referenced, and output is identical. The
+cost is 16 KB of RAM instead of read-only data, which may matter on
+embedded targets. The first `OPL3_Reset` in the process must not run
+concurrently with another reset.
+
 If it has been a while since you have updated your project's vendored copy of
 Nuked-OPL3, you should be aware of a couple things:
 
