@@ -86,6 +86,9 @@
  *     key off, zero phase/output state, mod/trem frozen) is tagged with the
  *     chip's write generation and skipped with a single compare per sample
  *     until the next register write.
+ *   - Compatibility switches OPL_COMPAT_OLD_EG (pre-2024 envelope stepping)
+ *     and OPL_COMPAT_DEFERRED_4OP_ALG (pre-Nov-2022 4-op routing update),
+ *     both default-off; see opl3.h.
  */
 
 #include <stddef.h>
@@ -393,7 +396,11 @@ static void OPL3_EnvelopeCalc(opl3_slot *slot)
         }
         else
         {
+#if OPL_COMPAT_OLD_EG
+            shift = (rate_hi & 0x03) + eg_incstep[rate_lo][slot->chip->timer & 0x03u];
+#else
             shift = (rate_hi & 0x03) + eg_incstep[rate_lo][slot->chip->eg_timer_lo];
+#endif
             if (shift & 0x04)
             {
                 shift = 0x03;
@@ -1177,14 +1184,18 @@ static void OPL3_ChannelSet4Op(opl3_chip *chip, uint8_t data)
         {
             chip->channel[chnum].chtype = ch_4op;
             chip->channel[chnum + 3u].chtype = ch_4op2;
+#if !OPL_COMPAT_DEFERRED_4OP_ALG
             OPL3_ChannelUpdateAlg(&chip->channel[chnum]);
+#endif
         }
         else
         {
             chip->channel[chnum].chtype = ch_2op;
             chip->channel[chnum + 3u].chtype = ch_2op;
+#if !OPL_COMPAT_DEFERRED_4OP_ALG
             OPL3_ChannelUpdateAlg(&chip->channel[chnum]);
             OPL3_ChannelUpdateAlg(&chip->channel[chnum + 3u]);
+#endif
         }
     }
 }
@@ -1535,6 +1546,31 @@ inline void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
 
     chip->timer++;
 
+#if OPL_COMPAT_OLD_EG
+    /* Pre-2024 envelope stepping (upstream 730f8c2 and earlier): eg_add is
+     * recomputed from the raw envelope timer every sample instead of only
+     * on eg_state cycles, and OPL3_EnvelopeCalc indexes eg_incstep with the
+     * live low bits of chip->timer instead of the latched eg_timer_lo. */
+    {
+        uint32_t eg_timer_low = (uint32_t)chip->eg_timer & 0x1fffu;
+        if (!eg_timer_low)
+        {
+            chip->eg_add = 0;
+        }
+        else
+        {
+#if defined(__GNUC__) || defined(__clang__)
+            shift = (uint8_t)__builtin_ctz(eg_timer_low);
+#else
+            while (((eg_timer_low >> shift) & 1) == 0)
+            {
+                shift++;
+            }
+#endif
+            chip->eg_add = shift + 1;
+        }
+    }
+#else
     if (chip->eg_state)
     {
         uint32_t eg_timer_low = (uint32_t)chip->eg_timer & 0x1fffu;
@@ -1556,6 +1592,7 @@ inline void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
         }
         chip->eg_timer_lo = (uint8_t)(chip->eg_timer & 0x3u);
     }
+#endif
 
     if (chip->eg_timerrem || chip->eg_state)
     {

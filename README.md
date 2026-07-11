@@ -92,10 +92,29 @@ Nuked-OPL3, you should be aware of a couple things:
   envelope algorithm. If your audio output isn't sample-for-sample the same
   after switching to Nuked-OPL3-fast, that's why, and your emulation is now more
   accurate. Before filing an issue claiming a divergence from upstream
-  Nuked-OPL3, make sure you're comparing to *current* upstream.
+  Nuked-OPL3, make sure you're comparing to *current* upstream. If you need
+  the old sound anyway, see the compatibility switches below.
 - Many projects have their own patches on top of Nuked-OPL3, commonly to
   add/modify pan laws, mixer-level muting of channels, buffering tweaks, etc. Be
   sure you reapply any such project-local patches to Nuked-OPL3-fast.
+
+### Compatibility switches
+
+Upstream Nuked-OPL3 has no tags and has called itself 1.8 since 2020, but its
+output has changed twice in that time. If your project pins an older commit
+and must not change sound, two default-off switches reproduce the old behavior
+exactly:
+
+- `-DOPL_COMPAT_OLD_EG=1`: envelope stepping from before the June/July 2024
+  envelope fixes (upstream `e4afafc` + `cfedb09`). Matches upstream `730f8c2`
+  (Nov 2023) and earlier.
+- `-DOPL_COMPAT_DEFERRED_4OP_ALG=1`: writes to the 4-op enable register 0x104
+  do not update operator routing until the channel's next C0 write, as before
+  upstream `f2c9873` (Nov 2022).
+
+A copy vendored before Nov 2022 (Furnace vintage) needs both; a Nov 2022 to
+May 2024 copy (AdPlug's and libvgm's pins) needs only `OPL_COMPAT_OLD_EG`.
+With both switches off you get current upstream master behavior.
 
 ## Bit-exactness
 

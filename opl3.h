@@ -52,6 +52,8 @@
  *     to opl3_chip (mix-eligibility lists).
  *   - Added the OPL_WF_TABLE_RUNTIME build option (runtime-built waveform
  *     table in place of wf_rom.h).
+ *   - Added the OPL_COMPAT_OLD_EG and OPL_COMPAT_DEFERRED_4OP_ALG build
+ *     options (parity with older upstream commits).
  */
 
 #ifndef OPL_OPL3_H
@@ -78,6 +80,29 @@ extern "C" {
  * another reset. */
 #ifndef OPL_WF_TABLE_RUNTIME
 #define OPL_WF_TABLE_RUNTIME 0
+#endif
+
+/* Compatibility switches for projects pinned to older upstream Nuked-OPL3
+ * commits. Both default to 0, the behavior of current upstream master
+ * (cfedb09). Enabled, they reproduce the older behavior exactly, so a
+ * consumer can adopt this fork with bit-identical output to the copy it
+ * already ships.
+ *
+ * OPL_COMPAT_OLD_EG=1 selects the envelope stepping from before upstream
+ * commits e4afafc and cfedb09 (June/July 2024): the per-sample envelope
+ * increment is derived from the raw envelope timer every sample and the
+ * increment-step table is indexed with the live global timer instead of a
+ * value latched on eg_state cycles. Matches upstream 730f8c2 (Nov 2023)
+ * and earlier, the vintage vendored by e.g. AdPlug, libvgm, and Furnace.
+ *
+ * OPL_COMPAT_DEFERRED_4OP_ALG=1 selects the pre-f2c9873 (Nov 2022)
+ * behavior: writes to the 4-op enable register 0x104 do not update a
+ * channel's operator routing until the channel's next C0 write. */
+#ifndef OPL_COMPAT_OLD_EG
+#define OPL_COMPAT_OLD_EG 0
+#endif
+#ifndef OPL_COMPAT_DEFERRED_4OP_ALG
+#define OPL_COMPAT_DEFERRED_4OP_ALG 0
 #endif
 
 #define OPL_WRITEBUF_SIZE   1024
