@@ -27,6 +27,36 @@ Across a 40-track random sample from
 1.42x to 2.30x faster than upstream (median 1.99x), with output identical to
 upstream Nuked-OPL3 on all 40.
 
+## Changelog
+
+Speedup over upstream Nuked-OPL3 (`cfedb09`), best of repeated runs, all
+versions measured in the same session. The corpus column is
+the per-file spread over the same 40-track OPL Archive sample:
+
+| Version | chip-core | dense VGM | 40-track corpus (min / median / max) |
+|-------------------------|-----------|-----------|--------------------------------------|
+| 1.8-fast.1              | 2.0x      | 1.7x      | 1.4 / 1.8 / 2.1x                     |
+| 1.8-fast.2              | 2.2x      | 1.7x      | 1.6 / 2.0 / 2.3x                     |
+| 1.8-fast.3 (unreleased) | 2.7x      | 1.7x      | 1.5 / 2.3 / 2.8x                     |
+
+The dense VGM column and the corpus minimum (its worst tracks) barely change
+after fast.1: nearly all voices are active every sample, and the later work
+speeds up silent and dormant voices, which those tracks do not have. On the
+densest few, fast.3 is even a hair slower than fast.2 from the extra gating.
+On typical music the difference is larger: the corpus median goes from 1.8x
+to 2.0x to 2.3x.
+
+- **1.8-fast.1** - initial release. Waveform math replaced by an 8x1024 logsin
+  lookup table, pre-shifted exprom, write-time envelope caches (TL+KSL, rate
+  resolution), fast paths for fully-attenuated / silent / sustain slots,
+  hot-field struct reorder, mix-loop unrolling.
+- **1.8-fast.2** - per-vibrato-position phase-increment cache, the noise LFSR
+  hoisted to one word-parallel advance per sample, and all 36 slots processed
+  before the mix with a trivially-silent-slot skip inlined.
+- **1.8-fast.3** - compile-time rhythm specialization (non-rhythm channels drop
+  the rhythm dispatch), precomputed mix-eligibility channel lists, and a
+  dormant-slot skip gated on a write-generation counter.
+
 ## API
 
 Drop-in source-level replacement. All public functions and the public
