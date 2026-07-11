@@ -37,7 +37,7 @@ the per-file spread over the same 40-track OPL Archive sample:
 |-------------------------|-----------|-----------|--------------------------------------|
 | 1.8-fast.1              | 2.0x      | 1.7x      | 1.4 / 1.8 / 2.1x                     |
 | 1.8-fast.2              | 2.2x      | 1.7x      | 1.6 / 2.0 / 2.3x                     |
-| 1.8-fast.3 (unreleased) | 2.7x      | 1.7x      | 1.5 / 2.3 / 2.8x                     |
+| 1.8-fast.3              | 2.7x      | 1.7x      | 1.5 / 2.3 / 2.8x                     |
 
 The dense VGM column and the corpus minimum (its worst tracks) barely change
 after fast.1: nearly all voices are active every sample, and the later work
@@ -55,7 +55,9 @@ to 2.0x to 2.3x.
   before the mix with a trivially-silent-slot skip inlined.
 - **1.8-fast.3** - compile-time rhythm specialization (non-rhythm channels drop
   the rhythm dispatch), precomputed mix-eligibility channel lists, and a
-  dormant-slot skip gated on a write-generation counter.
+  dormant-slot skip gated on a write-generation counter. Also adds the
+  `OPL_WF_TABLE_RUNTIME` build option and the `OPL_COMPAT_OLD_EG` /
+  `OPL_COMPAT_DEFERRED_4OP_ALG` compatibility switches.
 
 ## API
 
