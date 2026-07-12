@@ -24,7 +24,7 @@ production that is doing stuff in basically all the slots all the time.
 
 Across a 40-track random sample from
 [The OPL Archive](https://opl.wafflenet.com/), this fork rendered every file
-1.42x to 2.30x faster than upstream (median 1.99x), with output identical to
+1.5x to 2.8x faster than upstream (median 2.3x), with output identical to
 upstream Nuked-OPL3 on all 40.
 
 ## Changelog
