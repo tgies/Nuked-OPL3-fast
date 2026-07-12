@@ -156,6 +156,34 @@ The full annotated list is at the top of `opl3.c`. At a high level:
 - All 36 slots processed as channel pairs before either mix pass, with
   per-channel pointer lists reproducing the L/R sample-delay quirk and an
   inlined skip for trivially-silent slots.
+- Compile-time rhythm specialization: only channels 7 and 8 take the
+  rhythm-aware slot-processing path; the clone for every other channel
+  omits the `slot_num` checks and the rhythm dispatch.
+- Per-side mix-eligibility channel lists, rebuilt only when a register
+  write changes routing or algorithms.
+- Dormant-slot skip: a slot proven inert is tagged with the chip's write
+  generation and skipped with a single compare per sample until the next
+  register write.
+
+## Projects using this fork
+
+Nuked-OPL3-fast is used by, among others:
+
+- [DOSBox Staging](https://github.com/dosbox-staging/dosbox-staging) - DOS emulator
+- [DOSBox-X](https://github.com/joncampbell123/dosbox-x) - DOS emulator
+- [DOSBox Pure](https://github.com/schellingb/dosbox-pure) - libretro DOS core
+- [ScummVM](https://github.com/scummvm/scummvm) - adventure game engine
+- [86Box](https://github.com/86Box/86Box) - PC system emulator
+- [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom) - Doom source port
+- [Woof!](https://github.com/fabiangreffrath/woof) - Doom source port
+- [DSDA-Doom](https://github.com/kraflab/dsda-doom) - Doom source port
+- [International Doom](https://github.com/JNechaevsky/international-doom) - Doom source port
+- [CRL](https://github.com/JNechaevsky/CRL) - Doom/Heretic limit-research port
+- [Omnispeak](https://github.com/sulix/omnispeak) - Commander Keen reimplementation
+- [ReflectionHLE](https://github.com/ReflectionHLE/ReflectionHLE) - Catacomb/Keen engine port
+- [WildMIDI](https://github.com/Mindwerks/wildmidi) - software MIDI synthesizer
+- [libADLMIDI](https://github.com/Wohlstand/libADLMIDI) - OPL3 MIDI synth library
+- [OPL3GM](https://github.com/datajake1999/OPL3GM_VSTi) - OPL3 General MIDI synth
 
 ## Why a fork and not a PR?
 
