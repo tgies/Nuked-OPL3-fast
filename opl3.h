@@ -53,7 +53,8 @@
  *   - Added the OPL_WF_TABLE_RUNTIME build option (runtime-built waveform
  *     table in place of wf_rom.h).
  *   - Added the OPL_COMPAT_OLD_EG and OPL_COMPAT_DEFERRED_4OP_ALG build
- *     options (parity with older upstream commits).
+ *     options (parity with older upstream commits), plus the default-off
+ *     OPL_FIX_4OP_PITCH accuracy option.
  */
 
 #ifndef OPL_OPL3_H
@@ -103,6 +104,15 @@ extern "C" {
 #endif
 #ifndef OPL_COMPAT_DEFERRED_4OP_ALG
 #define OPL_COMPAT_DEFERRED_4OP_ALG 0
+#endif
+
+/* OPL_FIX_4OP_PITCH=1 fixes upstream issue #19: enabling a 4-op pair
+ * immediately makes its secondary operators use the primary channel's
+ * frequency and block, while preserving the secondary channel's latched
+ * A0/B0 frequency values for later 2-op use. It defaults to 0 so this fork's
+ * default output remains identical to upstream commit cfedb09. */
+#ifndef OPL_FIX_4OP_PITCH
+#define OPL_FIX_4OP_PITCH 0
 #endif
 
 #define OPL_WRITEBUF_SIZE   1024
@@ -184,7 +194,13 @@ struct _opl3_channel {
 
     uint8_t chtype;
     uint16_t f_num;
+#if OPL_FIX_4OP_PITCH
+    uint16_t f_num_reg;
+#endif
     uint8_t block;
+#if OPL_FIX_4OP_PITCH
+    uint8_t block_reg;
+#endif
     uint8_t fb;
     uint8_t con;
     uint8_t alg;
