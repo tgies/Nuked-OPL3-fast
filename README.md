@@ -57,7 +57,8 @@ to 2.0x to 2.3x.
   the rhythm dispatch), precomputed mix-eligibility channel lists, and a
   dormant-slot skip gated on a write-generation counter. Also adds the
   `OPL_WF_TABLE_RUNTIME` build option and the `OPL_COMPAT_OLD_EG` /
-  `OPL_COMPAT_DEFERRED_4OP_ALG` compatibility switches.
+  `OPL_COMPAT_DEFERRED_4OP_ALG` compatibility switches. The later
+  `OPL_FIX_4OP_PITCH` option provides an opt-in fix for upstream issue #19.
 
 ## API
 
@@ -116,7 +117,19 @@ exactly:
 
 A copy vendored before Nov 2022 (Furnace vintage) needs both; a Nov 2022 to
 May 2024 copy (AdPlug's and libvgm's pins) needs only `OPL_COMPAT_OLD_EG`.
-With both switches off you get current upstream master behavior.
+
+A third default-off switch opts into a correctness fix that is not in the
+fork's pinned upstream commit:
+
+- `-DOPL_FIX_4OP_PITCH=1`: when register 0x104 enables a 4-op pair, both
+  operator pairs immediately use the primary channel's frequency and block.
+  Writes to the secondary A0/B0 frequency fields remain latched and take
+  effect if the pair is later disabled. This fixes
+  [upstream issue #19](https://github.com/nukeykt/Nuked-OPL3/issues/19).
+
+With all switches at their defaults you get output identical to upstream
+commit `cfedb09`. Enable `OPL_FIX_4OP_PITCH` when accurate 4-op pitch handling
+is more important than matching that upstream revision's bug.
 
 ## Bit-exactness
 

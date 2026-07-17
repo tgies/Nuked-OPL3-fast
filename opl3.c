@@ -88,7 +88,8 @@
  *     until the next register write.
  *   - Compatibility switches OPL_COMPAT_OLD_EG (pre-2024 envelope stepping)
  *     and OPL_COMPAT_DEFERRED_4OP_ALG (pre-Nov-2022 4-op routing update),
- *     both default-off; see opl3.h.
+ *     plus the OPL_FIX_4OP_PITCH accuracy switch, all default-off; see
+ *     opl3.h.
  */
 
 #include <stddef.h>
@@ -796,12 +797,50 @@ static void OPL3_ChannelUpdateRhythm(opl3_chip *chip, uint8_t data)
     }
 }
 
+#if OPL_FIX_4OP_PITCH
+static void OPL3_ChannelUpdateFrequency(opl3_channel *channel)
+{
+    channel->ksv = (channel->block << 1)
+                 | ((channel->f_num >> (0x09 - channel->chip->nts)) & 0x01);
+    OPL3_EnvelopeUpdateKSL(channel->slotz[0]);
+    OPL3_EnvelopeUpdateKSL(channel->slotz[1]);
+    OPL3_EnvelopeUpdateRate(channel->slotz[0]);
+    OPL3_EnvelopeUpdateRate(channel->slotz[1]);
+    OPL3_PhaseUpdateInc(channel->slotz[0]);
+    OPL3_PhaseUpdateInc(channel->slotz[1]);
+}
+
+static void OPL3_ChannelRestoreFrequency(opl3_channel *channel)
+{
+    channel->f_num = channel->f_num_reg;
+    channel->block = channel->block_reg;
+    OPL3_ChannelUpdateFrequency(channel);
+}
+
+static void OPL3_ChannelSync4Op(opl3_channel *channel)
+{
+    channel->pair->f_num = channel->f_num;
+    channel->pair->block = channel->block;
+    OPL3_ChannelUpdateFrequency(channel->pair);
+}
+#endif
+
 static void OPL3_ChannelWriteA0(opl3_channel *channel, uint8_t data)
 {
+#if OPL_FIX_4OP_PITCH
+    channel->f_num_reg = (channel->f_num_reg & 0x300) | data;
+#endif
     if (channel->chip->newm && channel->chtype == ch_4op2)
     {
         return;
     }
+#if OPL_FIX_4OP_PITCH
+    OPL3_ChannelRestoreFrequency(channel);
+    if (channel->chip->newm && channel->chtype == ch_4op)
+    {
+        OPL3_ChannelSync4Op(channel);
+    }
+#else
     channel->f_num = (channel->f_num & 0x300) | data;
     channel->ksv = (channel->block << 1)
                  | ((channel->f_num >> (0x09 - channel->chip->nts)) & 0x01);
@@ -822,14 +861,26 @@ static void OPL3_ChannelWriteA0(opl3_channel *channel, uint8_t data)
         OPL3_PhaseUpdateInc(channel->pair->slotz[0]);
         OPL3_PhaseUpdateInc(channel->pair->slotz[1]);
     }
+#endif
 }
 
 static void OPL3_ChannelWriteB0(opl3_channel *channel, uint8_t data)
 {
+#if OPL_FIX_4OP_PITCH
+    channel->f_num_reg = (channel->f_num_reg & 0xff) | ((data & 0x03) << 8);
+    channel->block_reg = (data >> 2) & 0x07;
+#endif
     if (channel->chip->newm && channel->chtype == ch_4op2)
     {
         return;
     }
+#if OPL_FIX_4OP_PITCH
+    OPL3_ChannelRestoreFrequency(channel);
+    if (channel->chip->newm && channel->chtype == ch_4op)
+    {
+        OPL3_ChannelSync4Op(channel);
+    }
+#else
     channel->f_num = (channel->f_num & 0xff) | ((data & 0x03) << 8);
     channel->block = (data >> 2) & 0x07;
     channel->ksv = (channel->block << 1)
@@ -852,6 +903,7 @@ static void OPL3_ChannelWriteB0(opl3_channel *channel, uint8_t data)
         OPL3_PhaseUpdateInc(channel->pair->slotz[0]);
         OPL3_PhaseUpdateInc(channel->pair->slotz[1]);
     }
+#endif
 }
 
 static void OPL3_ChannelSetupAlgBody(opl3_channel *channel)
@@ -1184,6 +1236,16 @@ static void OPL3_ChannelSet4Op(opl3_chip *chip, uint8_t data)
         {
             chip->channel[chnum].chtype = ch_4op;
             chip->channel[chnum + 3u].chtype = ch_4op2;
+#if OPL_FIX_4OP_PITCH
+            if (chip->newm)
+            {
+                OPL3_ChannelSync4Op(&chip->channel[chnum]);
+            }
+            else
+            {
+                OPL3_ChannelRestoreFrequency(&chip->channel[chnum + 3u]);
+            }
+#endif
 #if !OPL_COMPAT_DEFERRED_4OP_ALG
             OPL3_ChannelUpdateAlg(&chip->channel[chnum]);
 #endif
@@ -1192,6 +1254,9 @@ static void OPL3_ChannelSet4Op(opl3_chip *chip, uint8_t data)
         {
             chip->channel[chnum].chtype = ch_2op;
             chip->channel[chnum + 3u].chtype = ch_2op;
+#if OPL_FIX_4OP_PITCH
+            OPL3_ChannelRestoreFrequency(&chip->channel[chnum + 3u]);
+#endif
 #if !OPL_COMPAT_DEFERRED_4OP_ALG
             OPL3_ChannelUpdateAlg(&chip->channel[chnum]);
             OPL3_ChannelUpdateAlg(&chip->channel[chnum + 3u]);
@@ -1768,7 +1833,29 @@ void OPL3_WriteReg(opl3_chip *chip, uint16_t reg, uint8_t v)
                 OPL3_ChannelSet4Op(chip, v);
                 break;
             case 0x05:
+#if OPL_FIX_4OP_PITCH
+                if (chip->newm != (v & 0x01))
+                {
+                    uint8_t chnum;
+                    chip->newm = v & 0x01;
+                    for (chnum = 0; chnum < 18; chnum++)
+                    {
+                        if (chip->channel[chnum].chtype == ch_4op)
+                        {
+                            if (chip->newm)
+                            {
+                                OPL3_ChannelSync4Op(&chip->channel[chnum]);
+                            }
+                            else
+                            {
+                                OPL3_ChannelRestoreFrequency(chip->channel[chnum].pair);
+                            }
+                        }
+                    }
+                }
+#else
                 chip->newm = v & 0x01;
+#endif
 #if OPL_ENABLE_STEREOEXT
                 chip->stereoext = (v >> 1) & 0x01;
 #endif
